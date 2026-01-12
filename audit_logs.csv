@@ -1,0 +1,8 @@
+timestamp,user_email,service_name,method_name,resource_name,severity
+2025-10-01T09:00:00Z,dev-user@company.com,storage.googleapis.com,storage.objects.get,projects/prd-01/buckets/data-raw,INFO
+2025-10-01T09:05:00Z,dev-user@company.com,storage.googleapis.com,storage.objects.list,projects/prd-01/buckets/data-raw,INFO
+2025-10-01T10:15:00Z,dev-user@company.com,compute.googleapis.com,compute.instances.get,projects/prd-01/zones/us-east1/instances/web-node-1,INFO
+2025-10-01T10:20:00Z,dev-user@company.com,compute.googleapis.com,compute.instances.start,projects/prd-01/zones/us-east1/instances/web-node-1,INFO
+2025-10-02T14:00:00Z,dev-user@company.com,bigquery.googleapis.com,google.cloud.bigquery.v2.JobService.InsertJob,projects/prd-01/jobs/job-123,INFO
+2025-10-02T14:10:00Z,dev-user@company.com,bigquery.googleapis.com,google.cloud.bigquery.v2.TableService.GetTable,projects/prd-01/datasets/analytics/tables/users,INFO
+2025-10-03T11:00:00Z,dev-user@company.com,logging.googleapis.com,google.logging.v2.LoggingServiceV2.ListLogEntries,projects/prd-01,INFO

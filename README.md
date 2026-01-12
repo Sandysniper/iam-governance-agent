@@ -42,7 +42,8 @@ Create a .env file in the root directory:
 Bash : GEMINI_API_KEY=your_google_gemini_api_key
 
 3. Run via Virtual Environment
-Bash: python -m venv .venv
+Bash
+python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 streamlit run main.py

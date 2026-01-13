@@ -1,4 +1,4 @@
-              🛡️ CloudGuard: AI-Native IAM Governance Agent
+                         🛡️ CloudGuard: AI-Native IAM Governance Agent
 
 🎯 The Vision
 

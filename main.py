@@ -8,11 +8,13 @@ from langchain_core.output_parsers import StrOutputParser
  
 load_dotenv()
 
+api_key = os.getenv("GEMINI_API_KEY")
+
 # Setup Professional UI
 st.set_page_config(page_title="CloudGuard AI", page_icon="🛡️", layout="wide")
 st.title("🛡️ Enterprise CloudGuard: Multi-Cloud IAM Agent")
 
-llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
+llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash",google_api_key=api_key, temperature=0)
 
 # System Prompt that handles all 3 Clouds
 system_template = """You are a Senior DevSecOps Engineer specialized in Multi-Cloud Governance.

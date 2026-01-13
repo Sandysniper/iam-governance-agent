@@ -8,11 +8,25 @@ from langchain_core.output_parsers import StrOutputParser
  
 load_dotenv()
 
-api_key = os.getenv("GEMINI_API_KEY")
+
 
 # Setup Professional UI
 st.set_page_config(page_title="CloudGuard AI", page_icon="🛡️", layout="wide")
 st.title("🛡️ Enterprise CloudGuard: Multi-Cloud IAM Agent")
+
+try:
+    # First, try to get the key from Streamlit Cloud Secrets
+    api_key = st.secrets["GEMINI_API_KEY"]
+except FileNotFoundError:
+    # If running locally (where st.secrets doesn't exist), load from .env
+    from dotenv import load_dotenv
+    load_dotenv()
+    api_key = os.getenv("GEMINI_API_KEY")
+
+# Stop the app gracefully if no key is found
+if not api_key:
+    st.error("❌ API Key not found! Please add GEMINI_API_KEY to Streamlit Secrets or your .env file.")
+    st.stop()
 
 llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash",google_api_key=api_key, temperature=0)
 

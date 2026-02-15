@@ -1,33 +1,83 @@
 import streamlit as st
 import pandas as pd
 import os
-from dotenv import load_dotenv
+import io
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
- 
 
-
-
-
-# Setup Professional UI
+# --- 1. CONFIGURATION & SETUP ---
 st.set_page_config(page_title="CloudGuard AI", page_icon="🛡️", layout="wide")
+
+# Custom CSS to make the "Demo" button pop
+st.markdown("""
+<style>
+    .stButton>button {
+        width: 100%;
+        border-radius: 5px;
+        height: 3em;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 st.title("🛡️ Enterprise CloudGuard: Multi-Cloud IAM Agent")
 
-# Read the key from the environment (This is what Docker passes in)
+# Get API Key safely
 api_key = os.environ.get("GOOGLE_API_KEY")
-
-# Check if key is missing to prevent confusing errors later
 if not api_key:
-    raise ValueError("GOOGLE_API_KEY not found! Make sure to pass it in docker run.")
+    st.error("⚠️ GOOGLE_API_KEY missing! Please set it in Docker/Environment variables.")
+    st.stop()
 
-# Now initialize the model
+# Initialize LLM
 llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash", # Updated to the latest stable model
-    google_api_key=api_key, 
+    model="gemini-2.0-flash", # Updated to the latest fast model
+    google_api_key=api_key,
     temperature=0
 )
-# System Prompt that handles all 3 Clouds
+
+# --- 2. THE DEMO DATA (Embedded directly so no extra files needed) ---
+DEMO_LOGS = """timestamp,user_email,service_name,method_name,resource_name,severity
+2025-10-01T09:00:00Z,dev-user@company.com,storage.googleapis.com,storage.objects.get,projects/prd-01/buckets/data-raw,INFO
+2025-10-01T09:05:00Z,dev-user@company.com,storage.googleapis.com,storage.objects.list,projects/prd-01/buckets/data-raw,INFO
+2025-10-01T10:15:00Z,dev-user@company.com,compute.googleapis.com,compute.instances.get,projects/prd-01/zones/us-east1/instances/web-node-1,INFO
+2025-10-01T10:20:00Z,dev-user@company.com,compute.googleapis.com,compute.instances.start,projects/prd-01/zones/us-east1/instances/web-node-1,INFO
+2025-10-02T14:00:00Z,dev-user@company.com,bigquery.googleapis.com,google.cloud.bigquery.v2.JobService.InsertJob,projects/prd-01/jobs/job-123,INFO
+2025-10-02T14:10:00Z,dev-user@company.com,bigquery.googleapis.com,google.cloud.bigquery.v2.TableService.GetTable,projects/prd-01/datasets/analytics/tables/users,INFO
+2025-10-03T11:00:00Z,dev-user@company.com,logging.googleapis.com,google.logging.v2.LoggingServiceV2.ListLogEntries,projects/prd-01,INFO
+"""
+
+# --- 3. SESSION STATE MANAGEMENT ---
+if 'data' not in st.session_state:
+    st.session_state.data = None
+if 'source' not in st.session_state:
+    st.session_state.source = None
+
+# --- 4. SIDEBAR CONTROLS ---
+with st.sidebar:
+    st.header("⚙️ Data Source")
+    
+    # Option A: Upload File
+    uploaded_file = st.file_uploader("Upload Audit Logs (CSV/JSON)", type=["csv", "json"])
+    
+    # Option B: Use Demo Data
+    st.markdown("---")
+    st.subheader("🚀 Quick Start")
+    if st.button("Load Demo Data (Recruiter Mode)"):
+        st.session_state.data = pd.read_csv(io.StringIO(DEMO_LOGS))
+        st.session_state.source = "Demo Logs"
+        st.success("Loaded Demo Data!")
+    
+    if st.button("Clear / Reset"):
+        st.session_state.data = None
+        st.session_state.source = None
+        st.rerun()
+
+# Logic to handle uploaded file taking priority if valid
+if uploaded_file:
+    st.session_state.data = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_json(uploaded_file)
+    st.session_state.source = "Uploaded File"
+
+# --- 5. MAIN LOGIC ---
 system_template = """You are a Senior DevSecOps Engineer specialized in Multi-Cloud Governance.
 Your task is to analyze Cloud Audit Logs (AWS CloudTrail, GCP Audit, or Azure Activity Logs).
 
@@ -44,7 +94,8 @@ Generate production-quality Terraform code.
 - For GCP: Use `google_project_iam_custom_role`.
 - For Azure: Use `azurerm_role_definition`.
 
-Ensure the code is clean, follows HCL standards, and uses specific resource names."""
+Ensure the code is clean, follows HCL standards, and uses specific resource names.
+Output the analysis first, then the code in a ```hcl block."""
 
 prompt = ChatPromptTemplate.from_messages([
     ("system", system_template),
@@ -53,25 +104,33 @@ prompt = ChatPromptTemplate.from_messages([
 
 chain = prompt | llm | StrOutputParser()
 
-uploaded_file = st.file_uploader("Upload Multi-Cloud Audit Logs (CSV/JSON)", type=["csv", "json"])
+if st.session_state.data is not None:
+    st.info(f"Using Source: {st.session_state.source}")
+    st.write("### 📊 Log Preview", st.session_state.data.head())
 
-if uploaded_file:
-    df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_json(uploaded_file)
-    st.write("### 📊 Log Preview", df.head())
-
-    if st.button("Generate Enterprise Security Policy"):
+    if st.button("Generate Enterprise Security Policy", type="primary"):
         with st.spinner("Analyzing Cloud Infrastructure..."):
-            response = chain.invoke({"logs": df.to_string()})
+            response = chain.invoke({"logs": st.session_state.data.to_string()})
             
-            # Use columns to make it look like a dashboard
+            # Layout
             col1, col2 = st.columns([1, 1])
+            
+            # Parse Response
+            parts = response.split("```")
+            analysis = parts[0]
+            # Try to find the HCL/Terraform block even if the split index varies
+            terraform_code = "No code generated."
+            for part in parts:
+                if "resource" in part or "terraform" in part or "hcl" in part:
+                     # Clean up the language identifier
+                    terraform_code = part.replace("hcl", "").replace("terraform", "").strip()
+
             with col1:
                 st.subheader("📝 Security Assessment")
-                # Split the response to show text here
-                st.markdown(response.split("```")[0])
+                st.markdown(analysis)
+            
             with col2:
                 st.subheader("🛠️ Terraform Infrastructure")
-                # Extract the code block
-                if "```" in response:
-                    code = response.split("```")[1].replace("hcl", "").replace("terraform", "")
-                    st.code(code, language="hcl")
+                st.code(terraform_code, language="hcl")
+else:
+    st.info("👈 Please upload a file or click 'Load Demo Data' in the sidebar to begin.")

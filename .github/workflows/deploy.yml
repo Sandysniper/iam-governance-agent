@@ -42,5 +42,6 @@ jobs:
             --allow-unauthenticated \
             --set-env-vars GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }} \
             --max-instances 1 \
-            --memory 512Mi \
+            --memory 1Gi \
+            --timeout 300s \
             --cpu 1

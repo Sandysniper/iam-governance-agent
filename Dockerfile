@@ -19,8 +19,8 @@ pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Expose the port used by Streamlit
-EXPOSE 8501
+EXPOSE 8080
 
 # The CORRECT command to launch Streamlit
 # (This fixes the "missing ScriptRunContext" warning)
-CMD ["streamlit", "run", "main.py", "--server.port=8501", "--server.address=0.0.0.0"]
+CMD ["streamlit", "run", "main.py", "--server.port=8080", "--server.address=0.0.0.0"]

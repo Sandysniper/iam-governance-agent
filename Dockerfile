@@ -23,4 +23,4 @@ EXPOSE 8080
 
 # The CORRECT command to launch Streamlit
 # (This fixes the "missing ScriptRunContext" warning)
-CMD ["streamlit", "run", "main.py", "--server.port=8080", "--server.address=0.0.0.0"]
+CMD ["sh", "-c", "streamlit run main.py --server.port=${PORT:-8080} --server.address=0.0.0.0 --server.enableCORS=false --server.enableXsrfProtection=false"]

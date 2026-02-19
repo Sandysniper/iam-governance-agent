@@ -30,7 +30,7 @@ if not api_key:
 
 # Initialize LLM
 llm = ChatGoogleGenerativeAI(
-    model="gemini-2.0-flash", # Updated to the latest fast model
+    model="gemini-2.5-flash", # Updated to the latest fast model
     google_api_key=api_key,
     temperature=0
 )

@@ -1,136 +1,223 @@
+"""
+main.py
+-------
+CloudGuard AI — Enterprise Multi-Cloud IAM Governance Agent
+Streamlit UI layer only. All business logic lives in the agent/ package.
+"""
+
 import streamlit as st
 import pandas as pd
-import os
 import io
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import StrOutputParser
+import json
 
-# --- 1. CONFIGURATION & SETUP ---
-st.set_page_config(page_title="CloudGuard AI", page_icon="🛡️", layout="wide")
+from agent import run_analysis
+from agent.parser import (
+    extract_terraform,
+    extract_analysis_sections,
+    format_reasoning_steps
+)
 
-# Custom CSS to make the "Demo" button pop
+# ============================================================
+# PAGE CONFIGURATION
+# ============================================================
+st.set_page_config(
+    page_title="CloudGuard AI",
+    page_icon="🛡️",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
 st.markdown("""
 <style>
-    .stButton>button {
-        width: 100%;
-        border-radius: 5px;
-        height: 3em;
-    }
+    .stButton>button { width: 100%; border-radius: 5px; height: 3em; }
+    .risk-critical { color: #FF4B4B; font-weight: bold; }
+    .risk-high { color: #FFA500; font-weight: bold; }
+    .risk-medium { color: #FFD700; font-weight: bold; }
+    .risk-low { color: #00CC44; font-weight: bold; }
+    .step-box { background: #1E1E1E; padding: 10px; border-radius: 5px; margin: 5px 0; }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🛡️ Enterprise CloudGuard: Multi-Cloud IAM Agent")
+st.title("🛡️ Enterprise CloudGuard AI")
+st.caption("Multi-Cloud IAM Security Agent | Powered by LangChain ReAct + Google Gemini")
 
-# Get API Key safely
-api_key = os.environ.get("GOOGLE_API_KEY")
-if not api_key:
-    st.error("⚠️ GOOGLE_API_KEY missing! Please set it in Docker/Environment variables.")
-    st.stop()
+# ============================================================
+# DEMO DATA — One per cloud provider to prove multi-cloud
+# ============================================================
 
-# Initialize LLM
-llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash", # Updated to the latest fast model
-    google_api_key=api_key,
-    temperature=0
-)
-
-# --- 2. THE DEMO DATA (Embedded directly so no extra files needed) ---
-DEMO_LOGS = """timestamp,user_email,service_name,method_name,resource_name,severity
+DEMO_GCP = """timestamp,user_email,service_name,method_name,resource_name,severity
 2025-10-01T09:00:00Z,dev-user@company.com,storage.googleapis.com,storage.objects.get,projects/prd-01/buckets/data-raw,INFO
 2025-10-01T09:05:00Z,dev-user@company.com,storage.googleapis.com,storage.objects.list,projects/prd-01/buckets/data-raw,INFO
 2025-10-01T10:15:00Z,dev-user@company.com,compute.googleapis.com,compute.instances.get,projects/prd-01/zones/us-east1/instances/web-node-1,INFO
 2025-10-01T10:20:00Z,dev-user@company.com,compute.googleapis.com,compute.instances.start,projects/prd-01/zones/us-east1/instances/web-node-1,INFO
-2025-10-02T14:00:00Z,dev-user@company.com,bigquery.googleapis.com,google.cloud.bigquery.v2.JobService.InsertJob,projects/prd-01/jobs/job-123,INFO
-2025-10-02T14:10:00Z,dev-user@company.com,bigquery.googleapis.com,google.cloud.bigquery.v2.TableService.GetTable,projects/prd-01/datasets/analytics/tables/users,INFO
-2025-10-03T11:00:00Z,dev-user@company.com,logging.googleapis.com,google.logging.v2.LoggingServiceV2.ListLogEntries,projects/prd-01,INFO
+2025-10-02T14:00:00Z,analyst@company.com,bigquery.googleapis.com,google.cloud.bigquery.v2.JobService.InsertJob,projects/prd-01/jobs/job-123,INFO
+2025-10-02T14:10:00Z,analyst@company.com,bigquery.googleapis.com,google.cloud.bigquery.v2.TableService.GetTable,projects/prd-01/datasets/analytics/tables/users,INFO
+2025-10-03T11:00:00Z,analyst@company.com,logging.googleapis.com,google.logging.v2.LoggingServiceV2.ListLogEntries,projects/prd-01,INFO
 """
 
-# --- 3. SESSION STATE MANAGEMENT ---
-if 'data' not in st.session_state:
-    st.session_state.data = None
-if 'source' not in st.session_state:
-    st.session_state.source = None
+DEMO_AWS = """timestamp,user_email,eventName,eventSource,requestParameters,severity
+2025-10-01T09:00:00Z,dev@company.com,GetObject,s3.amazonaws.com,bucket=prod-data,INFO
+2025-10-01T10:00:00Z,dev@company.com,ListBuckets,s3.amazonaws.com,,INFO
+2025-10-02T14:00:00Z,admin@company.com,DescribeInstances,ec2.amazonaws.com,,INFO
+2025-10-02T15:00:00Z,admin@company.com,CreateUser,iam.amazonaws.com,username=newuser,WARNING
+2025-10-03T09:00:00Z,admin@company.com,AttachRolePolicy,iam.amazonaws.com,policyArn=AdministratorAccess,CRITICAL
+"""
 
-# --- 4. SIDEBAR CONTROLS ---
+DEMO_AZURE = """timestamp,caller,operationName,resourceGroup,resourceProvider,severity
+2025-10-01T09:00:00Z,ops@company.com,Microsoft.Compute/virtualMachines/read,prod-rg,Microsoft.Compute,INFO
+2025-10-01T10:00:00Z,ops@company.com,Microsoft.Storage/storageAccounts/read,prod-rg,Microsoft.Storage,INFO
+2025-10-02T14:00:00Z,admin@company.com,Microsoft.Authorization/roleAssignments/write,prod-rg,Microsoft.Authorization,WARNING
+2025-10-02T15:00:00Z,admin@company.com,Microsoft.Compute/virtualMachines/delete,prod-rg,Microsoft.Compute,CRITICAL
+"""
+
+# ============================================================
+# SESSION STATE
+# ============================================================
+for key in ["data", "source", "result"]:
+    if key not in st.session_state:
+        st.session_state[key] = None
+
+# ============================================================
+# SIDEBAR
+# ============================================================
 with st.sidebar:
     st.header("⚙️ Data Source")
-    
-    # Option A: Upload File
     uploaded_file = st.file_uploader("Upload Audit Logs (CSV/JSON)", type=["csv", "json"])
-    
-    # Option B: Use Demo Data
+
     st.markdown("---")
-    st.subheader("🚀 Quick Start")
-    if st.button("Load Demo Data (Recruiter Mode)"):
-        st.session_state.data = pd.read_csv(io.StringIO(DEMO_LOGS))
-        st.session_state.source = "Demo Logs"
-        st.success("Loaded Demo Data!")
-    
-    if st.button("Clear / Reset"):
+    st.subheader("🚀 Demo Data")
+    st.caption("Load provider-specific demo logs to see multi-cloud support in action.")
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if st.button("GCP"):
+            st.session_state.data = pd.read_csv(io.StringIO(DEMO_GCP))
+            st.session_state.source = "GCP Demo"
+            st.session_state.result = None
+            st.success("GCP logs loaded!")
+    with col2:
+        if st.button("AWS"):
+            st.session_state.data = pd.read_csv(io.StringIO(DEMO_AWS))
+            st.session_state.source = "AWS Demo"
+            st.session_state.result = None
+            st.success("AWS logs loaded!")
+    with col3:
+        if st.button("Azure"):
+            st.session_state.data = pd.read_csv(io.StringIO(DEMO_AZURE))
+            st.session_state.source = "Azure Demo"
+            st.session_state.result = None
+            st.success("Azure logs loaded!")
+
+    st.markdown("---")
+    if st.button("🔄 Clear / Reset"):
         st.session_state.data = None
         st.session_state.source = None
+        st.session_state.result = None
         st.rerun()
 
-# Logic to handle uploaded file taking priority if valid
+# Handle file upload
 if uploaded_file:
-    st.session_state.data = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_json(uploaded_file)
-    st.session_state.source = "Uploaded File"
+    try:
+        if uploaded_file.name.endswith(".csv"):
+            st.session_state.data = pd.read_csv(uploaded_file)
+        else:
+            st.session_state.data = pd.read_json(uploaded_file)
+        st.session_state.source = f"Uploaded: {uploaded_file.name}"
+        st.session_state.result = None
+    except Exception as e:
+        st.error(f"Could not read file: {str(e)}")
 
-# --- 5. MAIN LOGIC ---
-system_template = """You are a Senior DevSecOps Engineer specialized in Multi-Cloud Governance.
-Your task is to analyze Cloud Audit Logs (AWS CloudTrail, GCP Audit, or Azure Activity Logs).
+# ============================================================
+# MAIN CONTENT
+# ============================================================
+if st.session_state.data is None:
+    st.info("👈 Upload your audit logs or load a demo dataset from the sidebar to begin.")
 
-STEP 1: IDENTIFY PROVIDER
-Analyze the log format. If you see 'eventName' it's AWS. If 'methodName' it's GCP. If 'operationName' it's Azure.
+    # Show architecture explanation on landing
+    st.markdown("---")
+    st.subheader("🤖 How the Agent Works")
+    st.markdown("""
+    CloudGuard AI uses a **ReAct (Reasoning + Acting)** agent loop — not a simple LLM prompt.
+    
+    The agent autonomously decides which tool to use at each step:
+    
+    | Step | Tool | What it Does |
+    |------|------|--------------|
+    | 1 | `detect_cloud_provider` | Identifies AWS / GCP / Azure from log structure |
+    | 2 | `analyze_user_behavior` | Maps what each user actually did |
+    | 3 | `identify_policy_gaps` | Finds over-privileged users (POLP violations) |
+    | 4 | `generate_terraform_remediation` | Writes production-ready IaC fix code |
+    | 5 | `check_compliance_violations` | Maps gaps to CIS, SOC2, ISO 27001 |
+    
+    Unlike a simple API call, the agent **thinks between each step**, observes the result,
+    and decides what to do next — just like a human security analyst would.
+    """)
 
-STEP 2: SECURITY ANALYSIS
-- Summarize the user's actual behavior in 3 bullet points.
-- Identify "Dangerous Gaps" (e.g., User has 'AdministratorAccess' but only uses 'S3ReadOnly').
+else:
+    # Show loaded data
+    st.info(f"📂 Source: **{st.session_state.source}**")
+    with st.expander("📊 Log Preview", expanded=True):
+        st.dataframe(st.session_state.data, use_container_width=True)
+        st.caption(f"{len(st.session_state.data)} log entries loaded")
 
-STEP 3: IAC GENERATION
-Generate production-quality Terraform code. 
-- For AWS: Use `aws_iam_policy` and `aws_iam_role_policy_attachment`.
-- For GCP: Use `google_project_iam_custom_role`.
-- For Azure: Use `azurerm_role_definition`.
+    # Analysis button
+    if st.button("🚀 Run Security Analysis", type="primary"):
+        st.session_state.result = None
 
-Ensure the code is clean, follows HCL standards, and uses specific resource names.
-Output the analysis first, then the code in a ```hcl block."""
+        with st.spinner("🤖 Agent is reasoning through your logs..."):
+            log_string = st.session_state.data.to_csv(index=False)
+            result = run_analysis(log_string)
+            st.session_state.result = result
 
-prompt = ChatPromptTemplate.from_messages([
-    ("system", system_template),
-    ("human", "Analyze these logs and provide a security report + Terraform:\n\n{logs}")
-])
+    # Display results
+    if st.session_state.result:
+        result = st.session_state.result
 
-chain = prompt | llm | StrOutputParser()
+        if result.get("error"):
+            st.error(f"Analysis failed: {result['error']}")
+            st.info("Check that your GOOGLE_API_KEY is set correctly and your log format is valid.")
 
-if st.session_state.data is not None:
-    st.info(f"Using Source: {st.session_state.source}")
-    st.write("### 📊 Log Preview", st.session_state.data.head())
+        else:
+            st.success("✅ Analysis Complete")
+            st.markdown("---")
 
-    if st.button("Generate Enterprise Security Policy", type="primary"):
-        with st.spinner("Analyzing Cloud Infrastructure..."):
-            response = chain.invoke({"logs": st.session_state.data.to_string()})
-            
-            # Layout
+            # --- Agent Reasoning Steps ---
+            with st.expander("🧠 Agent Reasoning Steps (ReAct Loop)", expanded=False):
+                steps = format_reasoning_steps(result.get("steps", []))
+                if steps:
+                    for i, step in enumerate(steps, 1):
+                        st.markdown(f"**Step {i}: {step['emoji']} `{step['tool']}`**")
+                        st.caption(f"Input: {step['input_preview']}")
+                        st.caption(f"Output: {step['output_preview']}")
+                        st.markdown("---")
+                else:
+                    st.info("No intermediate steps captured.")
+
+            # --- Main Results Layout ---
             col1, col2 = st.columns([1, 1])
-            
-            # Parse Response
-            parts = response.split("```")
-            analysis = parts[0]
-            # Try to find the HCL/Terraform block even if the split index varies
-            terraform_code = "No code generated."
-            for part in parts:
-                if "resource" in part or "terraform" in part or "hcl" in part:
-                     # Clean up the language identifier
-                    terraform_code = part.replace("hcl", "").replace("terraform", "").strip()
 
             with col1:
                 st.subheader("📝 Security Assessment")
-                st.markdown(analysis)
-            
+                sections = extract_analysis_sections(result.get("output", ""))
+                st.markdown(sections.get("raw", "No assessment generated."))
+
+                # Compliance report
+                compliance = result.get("compliance", "")
+                if compliance and compliance != "Compliance check not completed.":
+                    st.markdown("---")
+                    st.subheader("📋 Compliance Status")
+                    st.warning(compliance)
+
             with col2:
-                st.subheader("🛠️ Terraform Infrastructure")
-                st.code(terraform_code, language="hcl")
-else:
-    st.info("👈 Please upload a file or click 'Load Demo Data' in the sidebar to begin.")
+                st.subheader("🛠️ Terraform Remediation")
+                terraform = result.get("terraform", "")
+                if terraform and terraform != "No Terraform code was generated.":
+                    st.code(terraform, language="hcl")
+                    st.download_button(
+                        label="⬇️ Download Terraform",
+                        data=terraform,
+                        file_name="cloudguard_remediation.tf",
+                        mime="text/plain"
+                    )
+                else:
+                    st.info("No Terraform code was generated for this log set.")

@@ -1,61 +1,233 @@
-                         🛡️ CloudGuard: AI-Native IAM Governance Agent
+# 🛡️ Enterprise CloudGuard AI — Multi-Cloud IAM Governance Agent
 
-🎯 The Vision
+> An Agentic AI application that automates cloud security auditing and enforces the **Principle of Least Privilege (POLP)** across AWS, GCP, and Azure — using a LangChain ReAct agent powered by Google Gemini.
 
-Modern Enterprise IT environments are scaling faster than security teams can audit them. CloudGuard is an Agentic AI solution designed to reset the economics of cloud governance by automating the transition to Least-Privilege security architectures.
+🔗 **Live Demo:** [cloudguard-ai-1090832356893.us-central1.run.app](https://cloudguard-ai-1090832356893.us-central1.run.app)
 
-Instead of manual, reactive log reviews, CloudGuard uses Generative AI to proactively analyze cloud audit logs and generate production-ready Infrastructure-as-Code (Terraform) to close security gaps.
+---
 
+## 🎯 The Problem
 
-🚀 Key Features (Agentic AI Outcomes)
+Enterprise cloud environments generate millions of audit log events daily. Manually reviewing these logs across multiple cloud providers to identify over-privileged IAM roles is:
 
-Intelligent Log Parsing: Automatically identifies Cloud Provider (AWS/GCP/Azure) from raw JSON/CSV audit logs.
+- **Slow** — Security teams spend days on what should take minutes
+- **Reactive** — Issues are found after breaches, not before
+- **Error-prone** — Human reviewers miss subtle permission creep
+- **Expensive** — Over-provisioned permissions increase blast radius of any breach
 
-Gap Analysis: Uses RAG (Retrieval-Augmented Generation) to compare actual user behavior against existing permissions.
+---
 
-Automated Remediation: Generates context-aware Terraform HCL for immediate risk reduction.
+## ✅ The Solution
 
-ITSM Integration: Designed with an ITOM-first mindset, providing clear, business-focused summaries for both technical and non-technical stakeholders.
+CloudGuard AI replaces manual IAM audits with an **autonomous AI agent** that:
 
+1. Ingests audit logs from any major cloud provider
+2. Analyzes actual user behavior patterns
+3. Identifies dangerous permission gaps
+4. Generates production-ready Terraform to fix them
+5. Maps violations to compliance frameworks automatically
 
-🛠️ Tech Stack
+**Result:** IAM audit time reduced from hours → under 2 minutes. Zero manual policy writing required.
 
-AI Engine: Google Gemini 1.5 Pro (via LangChain).
+---
 
-Frontend: Streamlit (Rapid Solution Prototyping).
+## 🤖 How the Agent Works (ReAct Architecture)
 
-Infrastructure: Python, Docker, AWS App Runner.
+CloudGuard AI is a **true agentic system** — not a simple LLM API call.
 
-Security Logic: IAM, Okta/Zero-Trust Principles.
+It uses the **ReAct (Reasoning + Acting)** framework where the agent thinks about what to do, calls a tool, observes the result, then decides the next step — exactly like a human security analyst would.
 
-📦 Installation & Setup
+```
+User uploads logs
+       ↓
+[THINK] What cloud provider is this?
+       ↓
+[ACT]  → detect_cloud_provider()
+       ↓
+[OBSERVE] "GCP Audit Logs detected"
+       ↓
+[THINK] Now I need to map user behavior
+       ↓
+[ACT]  → analyze_user_behavior()
+       ↓
+[OBSERVE] "3 users mapped, actions extracted"
+       ↓
+[THINK] Now identify who is over-privileged
+       ↓
+[ACT]  → identify_policy_gaps()
+       ↓
+[OBSERVE] "2 CRITICAL, 1 HIGH risk users found"
+       ↓
+[ACT]  → generate_terraform_remediation()
+       ↓
+[ACT]  → check_compliance_violations()
+       ↓
+Final executive security report + downloadable Terraform
+```
 
-1. Clone the Repository
-Bash
+| Step | Tool | What It Does |
+|------|------|--------------|
+| 1 | `detect_cloud_provider` | Identifies AWS / GCP / Azure from log structure |
+| 2 | `analyze_user_behavior` | Maps what each user actually did in the logs |
+| 3 | `identify_policy_gaps` | Flags over-privileged users violating POLP |
+| 4 | `generate_terraform_remediation` | Writes provider-specific least-privilege IaC |
+| 5 | `check_compliance_violations` | Maps gaps to CIS Benchmark, SOC2, ISO 27001 |
 
-git clone https://github.com/your-username/iam-governance-agent.git
+---
+
+## 🛠️ Tech Stack
+
+| Layer | Technology | Purpose |
+|-------|-----------|---------|
+| AI Agent | LangChain AgentExecutor + ReAct | Autonomous reasoning and tool orchestration |
+| LLM | Google Gemini 2.0 Flash | Fast, intelligent security analysis |
+| Frontend | Streamlit | Interactive UI with agent reasoning display |
+| IaC Output | HashiCorp Terraform (HCL) | Production-ready remediation code |
+| Containerization | Docker | Portable, reproducible deployment |
+| Cloud Deployment | Google Cloud Run (Serverless) | Auto-scaling, zero-cost at idle |
+| CI/CD | GitHub Actions | Automated build and deploy pipeline |
+| Security | Environment-based secrets | No hardcoded credentials anywhere |
+
+---
+
+## 🔑 Core Features
+
+### 🔍 Intelligent Multi-Cloud Log Detection
+Automatically identifies the cloud provider from raw log structure — no configuration needed. Supports AWS CloudTrail, GCP Audit Logs, and Azure Activity Logs.
+
+### 📊 Behavior-Based Gap Analysis
+Analyzes what users *actually did* versus what permissions they *likely hold*. Flags CRITICAL, HIGH, MEDIUM, and LOW risk users with detailed reasoning.
+
+### 🛠️ Generative Terraform Remediation
+Produces provider-specific, production-ready Terraform with safety warnings built in. Human review required before `terraform apply` — by design.
+
+```hcl
+# Example GCP output
+resource "google_project_iam_custom_role" "least_privilege_dev_user" {
+  role_id     = "leastPrivilege_dev_user"
+  title       = "Least Privilege Role - dev-user@company.com"
+  description = "Auto-generated by CloudGuard AI. Risk was HIGH."
+  permissions = [
+    "storage.objects.get",
+    "storage.objects.list",
+  ]
+}
+```
+
+### 📋 Compliance Framework Mapping
+Automatically maps identified gaps to:
+- **CIS Benchmark** — Control 6.8 (Access Management)
+- **SOC 2** — CC6.3 (Least Privilege)
+- **ISO 27001** — A.9.2.3 (Privileged Access Rights)
+
+### 🚀 Multi-Cloud Demo Mode
+Built-in demo data for all three providers so any recruiter or stakeholder can run the tool instantly without uploading real logs.
+
+---
+
+## 📁 Project Structure
+
+```
+iam-governance-agent/
+│
+├── main.py                  # Streamlit UI layer only
+├── agent/
+│   ├── __init__.py          # Package exports
+│   ├── tools.py             # 5 LangChain @tool functions
+│   ├── executor.py          # ReAct agent assembly and execution
+│   └── parser.py            # Robust output parsing (regex-based)
+├── requirements.txt
+├── Dockerfile
+└── .github/
+    └── workflows/
+        └── deploy.yml       # CI/CD → GCP Cloud Run
+```
+
+---
+
+## ⚙️ Local Setup
+
+### Prerequisites
+- Python 3.11+
+- Google Gemini API key ([get one free here](https://makersuite.google.com/app/apikey))
+
+### Installation
+
+```bash
+# Clone the repo
+git clone https://github.com/Sandysniper/iam-governance-agent.git
 cd iam-governance-agent
 
-2. Configure Environment Variables
-Create a .env file in the root directory:
-
-Bash : GEMINI_API_KEY=your_google_gemini_api_key
-
-3. Run via Virtual Environment
-Bash
+# Create virtual environment
 python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+
+# Install dependencies
 pip install -r requirements.txt
+
+# Set your API key
+echo "GOOGLE_API_KEY=your_key_here" > .env
+
+# Run the app
 streamlit run main.py
+```
 
-📊 Business Value (ROI of AI)
+---
 
-Efficiency: Reduces IAM policy creation time from hours to seconds.
+## 🐳 Docker
 
-Accountability: Provides a clear audit trail of why specific permissions were suggested.
+```bash
+# Build
+docker build -t cloudguard-ai .
 
-Security: Eliminates "permission creep" by enforcing zero-trust principles automatically.
+# Run
+docker run -p 8080:8080 -e GOOGLE_API_KEY=your_key_here cloudguard-ai
+```
 
+---
 
+## 🚀 Deployment (GCP Cloud Run)
 
-LinkedIn: www.linkedin.com/in/santhosh-balaji-0b465a213 
+This project uses GitHub Actions for automated CI/CD to Google Cloud Run.
+
+Every push to `main` triggers:
+1. Docker image build
+2. Push to Google Artifact Registry
+3. Deploy to Cloud Run (serverless, scales to zero)
+
+**Zero billing at idle** — Cloud Run only charges when requests are being processed.
+
+---
+
+## ⚠️ Safety & Human Oversight
+
+CloudGuard AI generates Terraform for **human review — not auto-apply.**
+
+Every generated file includes:
+- Explicit safety warnings
+- `terraform plan` instructions
+- Staging environment recommendation
+- Security team approval reminder
+
+This is by design. Automated remediation without human approval is dangerous in production environments.
+
+---
+
+## 📈 Business Impact
+
+| Metric | Before CloudGuard | After CloudGuard |
+|--------|------------------|-----------------|
+| IAM audit time | Hours of manual review | Under 2 minutes |
+| Policy creation | Days of manual writing | Instant Terraform generation |
+| Compliance mapping | Separate manual process | Automatic with every scan |
+| Human error rate | High (manual review) | Near zero (AI-assisted) |
+
+---
+
+## 👤 Author
+
+**Santhosh Balaji**
+L1 Infrastructure Engineer → Cloud Security & AI Automation
+
+🔗 [LinkedIn](https://www.linkedin.com/in/santhosh-balaji-0b465a213)
+🔗 [Live App](https://cloudguard-ai-1090832356893.us-central1.run.app)
